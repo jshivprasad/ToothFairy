@@ -1,0 +1,173 @@
+{
+  "identity": {
+    "name": "E1",
+    "mission": "Create a clinical SaaS interface that balances sterile precision with human warmth. Reject generic 'Bootstrap Medical' templates.",
+    "core_principles": [
+      "Fusion: Swiss Precision x Organic Warmth",
+      "Content First: Patient data is the hero, UI is the frame",
+      "Zoom In: High-fidelity details on charts and teeth",
+      "Negative Space: Reduce cognitive load for busy doctors"
+    ]
+  },
+  "typography": {
+    "font_family": {
+      "headings": "Manrope",
+      "body": "Inter",
+      "mono": "JetBrains Mono"
+    },
+    "scale": {
+      "h1": { "size": 32, "line_height": 40, "weight": "700", "tracking": "-0.02em" },
+      "h2": { "size": 24, "line_height": 32, "weight": "600", "tracking": "-0.01em" },
+      "h3": { "size": 20, "line_height": 28, "weight": "600" },
+      "body_lg": { "size": 18, "line_height": 28, "weight": "400" },
+      "body_md": { "size": 16, "line_height": 24, "weight": "400" },
+      "body_sm": { "size": 14, "line_height": 20, "weight": "400" },
+      "caption": { "size": 12, "line_height": 16, "weight": "500", "uppercase": true, "tracking": "0.05em" }
+    },
+    "usage_rules": [
+      "Never use Inter for headings > 20px.",
+      "Use tabular-nums for all clinical data and phone numbers.",
+      "Headings should be Dark Slate (Light Mode) or Off-White (Dark Mode), never pure black."
+    ]
+  },
+  "colors": {
+    "palette_name": "Clinical Deep Teal",
+    "light_mode": {
+      "background": "#F8FAFC",
+      "surface": "#FFFFFF",
+      "primary": "#0F766E",
+      "primary_foreground": "#FFFFFF",
+      "secondary": "#CCFBF1",
+      "secondary_foreground": "#0F766E",
+      "accent": "#F43F5E",
+      "text_main": "#0F172A",
+      "text_muted": "#64748B",
+      "border": "#E2E8F0",
+      "success": "#10B981",
+      "warning": "#F59E0B"
+    },
+    "dark_mode": {
+      "background": "#020617",
+      "surface": "#0F172A",
+      "primary": "#14B8A6",
+      "primary_foreground": "#020617",
+      "secondary": "#115E59",
+      "secondary_foreground": "#CCFBF1",
+      "accent": "#FB7185",
+      "text_main": "#F8FAFC",
+      "text_muted": "#94A3B8",
+      "border": "#1E293B",
+      "success": "#34D399",
+      "warning": "#FBBF24"
+    },
+    "special": {
+      "ai_active": "#8B5CF6",
+      "ai_pulse": "rgba(139, 92, 246, 0.5)",
+      "overlay_scrim": "rgba(15, 23, 42, 0.6)"
+    }
+  },
+  "layout": {
+    "spacing_scale": {
+      "xs": 4,
+      "sm": 8,
+      "md": 12,
+      "lg": 16,
+      "xl": 24,
+      "2xl": 32,
+      "3xl": 48,
+      "section": 64
+    },
+    "border_radius": {
+      "sm": 6,
+      "md": 12,
+      "lg": 16,
+      "full": 9999
+    },
+    "safe_area": {
+      "top": "Use useSafeAreaInsets()",
+      "bottom": "Use useSafeAreaInsets()"
+    },
+    "grid_system": {
+      "dashboard_bento": "Use flex-wrap with percentage widths (48% / 100%) for mobile bento grid.",
+      "list_view": "Vertical stack with spacing-md."
+    }
+  },
+  "components": {
+    "buttons": {
+      "primary": {
+        "style": "bg-primary rounded-full px-6 py-3 shadow-lg active:scale-95 transition-transform",
+        "text_style": "text-white font-semibold text-base"
+      },
+      "secondary": {
+        "style": "bg-secondary rounded-full px-6 py-3",
+        "text_style": "text-secondary-foreground font-semibold text-base"
+      },
+      "ghost": {
+        "style": "bg-transparent px-4 py-2",
+        "text_style": "text-primary font-medium"
+      }
+    },
+    "cards": {
+      "style": "bg-surface rounded-xl border border-border shadow-sm p-4",
+      "dashboard_stat": "flex-1 min-w-[45%] bg-surface p-4 rounded-2xl border border-slate-100 shadow-[0_2px_8px_rgba(0,0,0,0.04)]"
+    },
+    "inputs": {
+      "style": "bg-background border border-border rounded-lg px-4 py-3 text-main mb-4 focus:border-primary",
+      "label_style": "text-sm font-medium text-text-muted mb-2"
+    },
+    "navigation": {
+      "tab_bar": {
+        "style": "bg-surface/90 border-t border-border absolute bottom-0 w-full h-20 pb-5 pt-3 flex-row justify-around items-center backdrop-blur-lg",
+        "active_icon": "text-primary",
+        "inactive_icon": "text-text-muted"
+      }
+    }
+  },
+  "assets": {
+    "images": {
+      "auth_hero": "https://images.unsplash.com/photo-1762625570087-6d98fca29531?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "doctor_consult": "https://images.unsplash.com/photo-1758205308181-d52b41e00cef?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "ai_wave_bg": "https://images.unsplash.com/photo-1706547041896-d5af33b5fd48?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "empty_state_appointments": "https://images.unsplash.com/photo-1642844771937-23accb161a3d?crop=entropy&cs=srgb&fm=jpg&q=85"
+    },
+    "icons": {
+      "library": "Lucide React Native or Expo Vector Icons",
+      "style": "Stroke width 1.5px (Light/Elegant), Size 24px"
+    }
+  },
+  "motion": {
+    "transitions": {
+      "default": "LayoutAnimation or Reanimated.withTiming(duration=300)",
+      "press": "Scale to 0.98 on press"
+    },
+    "ai_agent": {
+      "pulse": "Infinite ease-in-out opacity loop (0.5 to 1.0) for the AI status indicator"
+    }
+  },
+  "accessibility": {
+    "contrast": "Text must satisfy APCA Lc 60+ on backgrounds.",
+    "touch_targets": "Minimum 44x44 points for all interactive elements.",
+    "text_scaling": "All Text components must allow font scaling (do not fix maxFontSizeMultiplier unless absolutely necessary for layout)."
+  },
+  "tech_specifics": {
+    "platform": "React Native Expo",
+    "styling_strategy": "StyleSheet or NativeWind (if available). If using StyleSheet, mimic Tailwind class names in variable names (e.g., styles.p_4).",
+    "file_extension": ".js (per project structure)",
+    "safe_area_handling": "Always wrap screen content in SafeAreaView or use useSafeAreaInsets for padding."
+  },
+  "instructions_to_main_agent": {
+    "1": "Implement the Authentication flow first using the 'auth_hero' image as a background with a dark overlay.",
+    "2": "Build the Dashboard with the 'Bento' grid layout for stats (Appointments, AI Status, Revenue).",
+    "3": "The AI Agent Toggle must be the most prominent interaction on the dashboard. Use the 'ai_active' purple color when ON.",
+    "4": "Use the 'doctor_consult' image for the Patient Details profile header.",
+    "5": "Ensure all lists (Appointments, Patients) are rendered using FlatList for performance.",
+    "6": "Use 'Manrope' for all Headings (H1-H3) and 'Inter' for body text. Load these fonts via expo-font.",
+    "7": "Do not use 'div', 'span', 'p'. Use 'View', 'Text', 'TouchableOpacity', 'ScrollView'.",
+    "8": "Mock data should be realistic Indian names and contexts (e.g., 'Dr. Sharma', 'Aarav Patel', 'Root Canal')."
+  },
+  "universal_guidelines": {
+    "anti_slop": "Avoid generic centered layouts. Use asymmetry where possible. Add texture/noise to solid backgrounds if performance allows.",
+    "micro_interactions": "Buttons must provide feedback on press. Lists should fade in.",
+    "data_test_ids": "All interactive elements must have testID prop for testing."
+  }
+}
