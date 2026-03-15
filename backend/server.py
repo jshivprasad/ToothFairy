@@ -13,6 +13,7 @@ import json
 from datetime import datetime, timezone, timedelta
 from passlib.context import CryptContext
 from jose import jwt, JWTError
+from openai import AsyncOpenAI
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -39,6 +40,48 @@ api_router = APIRouter(prefix="/api")
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+# OpenAI client (direct SDK — put your key in OPENAI_API_KEY in .env)
+openai_client = AsyncOpenAI(api_key=os.environ.get('OPENAI_API_KEY', ''))
+
+# Conversation history store (in-memory per session, backed by MongoDB)
+chat_sessions: Dict[str, list] = {}
+
+async def call_gpt(system_prompt: str, user_message: str, session_id: str) -> str:
+    """Call OpenAI GPT-5.2 directly with conversation history"""
+    if session_id not in chat_sessions:
+        chat_sessions[session_id] = [{"role": "system", "content": system_prompt}]
+
+    chat_sessions[session_id].append({"role": "user", "content": user_message})
+
+    # Keep last 10 messages + system to avoid token overflow
+    messages = [chat_sessions[session_id][0]] + chat_sessions[session_id][-10:]
+
+    response = await openai_client.chat.completions.create(
+        model="gpt-4o",
+        messages=messages,
+        temperature=0.7,
+        max_tokens=500
+    )
+    ai_text = response.choices[0].message.content or ""
+    chat_sessions[session_id].append({"role": "assistant", "content": ai_text})
+    return ai_text
+
+
+# ===== STRICT AI PROMPT: NO DIAGNOSIS, NO DENTAL INFO =====
+NO_DIAGNOSIS_RULES = """
+CRITICAL RULES — YOU MUST FOLLOW THESE:
+- You are ONLY a receptionist. You are NOT a doctor. You are NOT a dentist.
+- NEVER provide any medical diagnosis, dental diagnosis, or health advice.
+- NEVER explain dental procedures, treatments, symptoms, causes, or remedies.
+- NEVER tell patients what their problem might be or what treatment they may need.
+- If a patient asks about dental procedures, symptoms, or treatments, ALWAYS say:
+  "Iske baare mein doctor aapko achhe se bata payenge. Main aapka appointment book kar deti hoon."
+  (For this, the doctor can explain better. Let me book your appointment.)
+- If patient describes pain/symptoms, show empathy but DO NOT diagnose. Just collect details for the appointment.
+- Your ONLY job is: greet, collect info, book appointments, tell clinic timings/address/fees, handle emergencies.
+- NEVER say things like "it could be a cavity", "you might need root canal", "this sounds like gingivitis" etc.
+"""
 
 # ============== PYDANTIC MODELS ==============
 
@@ -172,6 +215,7 @@ async def register(data: UserRegister):
         "pincode": "",
         "phone": data.phone,
         "email": data.email,
+        "twilio_number": "",
         "description": "",
         "fees_min": 500,
         "fees_max": 5000,
@@ -514,7 +558,7 @@ async def get_dashboard_stats(user=Depends(get_current_user)):
 
 @api_router.post("/ai-agent/chat")
 async def ai_agent_chat(request_data: dict, user=Depends(get_current_user)):
-    """Simulate AI agent conversation for testing"""
+    """AI agent conversation for testing"""
     clinic_id = user["clinic_id"]
     message = request_data.get("message", "")
     session_id = request_data.get("session_id", str(uuid.uuid4()))
@@ -522,7 +566,6 @@ async def ai_agent_chat(request_data: dict, user=Depends(get_current_user)):
     clinic = await db.clinics.find_one({"clinic_id": clinic_id}, {"_id": 0})
     if not clinic:
         clinic = await db.clinics.find_one({"id": clinic_id}, {"_id": 0})
-    ai_config = await db.ai_agent_config.find_one({"clinic_id": clinic_id}, {"_id": 0})
     hours = await db.clinic_hours.find({"clinic_id": clinic_id}, {"_id": 0}).to_list(7)
 
     clinic_name = clinic.get("name", "Dental Clinic") if clinic else "Dental Clinic"
@@ -555,42 +598,21 @@ Your tasks:
 5. Handle emergencies - if clinic is open, connect to doctor; if closed, take details and send to doctor
 6. Be professional, empathetic, and helpful
 
+{NO_DIAGNOSIS_RULES}
+
 Always respond in the patient's preferred language. If unsure, use Hindi."""
 
     try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        response = await call_gpt(system_prompt, message, session_id)
 
-        emergent_key = os.environ.get('EMERGENT_LLM_KEY', '')
-        chat = LlmChat(
-            api_key=emergent_key,
-            session_id=session_id,
-            system_message=system_prompt
-        )
-        chat.with_model("openai", "gpt-5.2")
-
-        user_message = UserMessage(text=message)
-        response = await chat.send_message(user_message)
-
-        # Save chat history
-        chat_doc = {
-            "id": str(uuid.uuid4()),
-            "clinic_id": clinic_id,
-            "session_id": session_id,
-            "role": "user",
-            "message": message,
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        }
-        await db.chat_history.insert_one(chat_doc)
-
-        ai_doc = {
-            "id": str(uuid.uuid4()),
-            "clinic_id": clinic_id,
-            "session_id": session_id,
-            "role": "assistant",
-            "message": response,
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        }
-        await db.chat_history.insert_one(ai_doc)
+        await db.chat_history.insert_one({
+            "id": str(uuid.uuid4()), "clinic_id": clinic_id, "session_id": session_id,
+            "role": "user", "message": message, "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+        await db.chat_history.insert_one({
+            "id": str(uuid.uuid4()), "clinic_id": clinic_id, "session_id": session_id,
+            "role": "assistant", "message": response, "timestamp": datetime.now(timezone.utc).isoformat()
+        })
 
         return {"response": response, "session_id": session_id}
     except Exception as e:
@@ -661,17 +683,16 @@ def is_clinic_open_now(hours_list: list) -> bool:
 
 
 @api_router.post("/twilio/voice/incoming")
-async def twilio_voice_incoming(request: Request, clinic_id: str = None):
+async def twilio_voice_incoming(request: Request):
     """
     MAIN ENTRY POINT: Twilio calls this when a patient dials the clinic number.
 
-    Flow:
-    1. Look up the clinic by clinic_id (passed as query param in Twilio webhook URL)
-    2. Check if AI agent is ON
-       - OFF → Forward call to doctor's phone
-       - ON  → Greet patient and start AI conversation with <Gather>
+    HOW CLINIC IS IDENTIFIED:
+    - Twilio sends "To" = the Twilio number the patient dialed
+    - We look up which clinic owns that Twilio number (stored in clinic.twilio_number)
+    - This means the webhook URL is simply: {APP_DOMAIN}/api/twilio/voice/incoming
+    - No clinic_id needed in URL — the To number identifies the clinic automatically
     """
-    # Extract form data (Twilio sends POST with form data)
     form = {}
     try:
         form = dict(await request.form())
@@ -679,22 +700,23 @@ async def twilio_voice_incoming(request: Request, clinic_id: str = None):
         pass
 
     caller_number = form.get("From", "Unknown")
-    logger.info(f"📞 Incoming call from {caller_number} for clinic {clinic_id}")
+    called_number = form.get("To", "")  # This is the Twilio number = clinic's AI number
+    logger.info(f"📞 Incoming call from {caller_number} to {called_number}")
 
-    if not clinic_id:
-        twiml = '<?xml version="1.0" encoding="UTF-8"?><Response>'
-        twiml += '<Say>Sorry, this number is not configured. Goodbye.</Say><Hangup/></Response>'
-        return Response(content=twiml, media_type="application/xml")
-
-    # Look up clinic and AI config
-    clinic = await db.clinics.find_one({"id": clinic_id}, {"_id": 0})
-    ai_config = await db.ai_agent_config.find_one({"clinic_id": clinic_id}, {"_id": 0})
-    hours = await db.clinic_hours.find({"clinic_id": clinic_id}, {"_id": 0}).to_list(7)
+    # Find clinic by the Twilio number that was called
+    clinic = await db.clinics.find_one({"twilio_number": called_number}, {"_id": 0})
+    if not clinic:
+        # Fallback: try matching by clinic phone
+        clinic = await db.clinics.find_one({"phone": called_number}, {"_id": 0})
 
     if not clinic:
         twiml = '<?xml version="1.0" encoding="UTF-8"?><Response>'
-        twiml += '<Say>Sorry, this clinic is not registered. Goodbye.</Say><Hangup/></Response>'
+        twiml += '<Say>Sorry, this number is not configured with any clinic. Goodbye.</Say><Hangup/></Response>'
         return Response(content=twiml, media_type="application/xml")
+
+    clinic_id = clinic["id"]
+    ai_config = await db.ai_agent_config.find_one({"clinic_id": clinic_id}, {"_id": 0})
+    hours = await db.clinic_hours.find({"clinic_id": clinic_id}, {"_id": 0}).to_list(7)
 
     ai_active = ai_config.get("is_active", False) if ai_config else False
     clinic_phone = clinic.get("phone", "")
@@ -744,7 +766,7 @@ async def twilio_voice_incoming(request: Request, clinic_id: str = None):
     twiml += '</Gather>'
     # If no input, repeat
     twiml += f'<Say voice="Google.hi-IN-Neural2-A" language="hi-IN">Koi response nahi mila. Kripya dobara try karein.</Say>'
-    twiml += f'<Redirect method="POST">{app_domain}/api/twilio/voice/incoming?clinic_id={clinic_id}</Redirect>'
+    twiml += f'<Redirect method="POST">{app_domain}/api/twilio/voice/incoming</Redirect>'
     twiml += '</Response>'
 
     logger.info(f"AI agent started conversation for clinic {clinic_id}, session {session_id}")
@@ -808,6 +830,8 @@ CLINIC INFO:
 - Hours:
 {hours_text}
 
+{NO_DIAGNOSIS_RULES}
+
 COLLECTED DATA SO FAR:
 {json.dumps(collected, ensure_ascii=False)}
 
@@ -831,18 +855,7 @@ RESPOND IN THIS JSON FORMAT:
 }}"""
 
     try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage
-        emergent_key = os.environ.get('EMERGENT_LLM_KEY', '')
-
-        chat = LlmChat(
-            api_key=emergent_key,
-            session_id=f"voice_{session_id}",
-            system_message=system_prompt
-        )
-        chat.with_model("openai", "gpt-5.2")
-
-        user_msg = UserMessage(text=f"Patient said: {patient_input}")
-        ai_response_raw = await chat.send_message(user_msg)
+        ai_response_raw = await call_gpt(system_prompt, f"Patient said: {patient_input}", f"voice_{session_id}")
 
         # Parse AI response
         try:
@@ -1309,6 +1322,8 @@ CLINIC INFO:
 - Hours:
 {hours_text}
 
+{NO_DIAGNOSIS_RULES}
+
 COLLECTED DATA SO FAR: {json.dumps(collected, ensure_ascii=False)}
 CONVERSATION SO FAR: {json.dumps(conversation[-6:], ensure_ascii=False)}
 
@@ -1325,18 +1340,7 @@ RESPOND AS JSON:
 {{"response_text": "...", "action": "CONTINUE|BOOK_APPOINTMENT|TRANSFER_TO_DOCTOR|EMERGENCY_AFTER_HOURS|END_CALL", "collected_data": {{"name": "", "phone": "", "problem": "", "preferred_date": "", "preferred_time": ""}}}}"""
 
     try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage
-        emergent_key = os.environ.get('EMERGENT_LLM_KEY', '')
-
-        chat = LlmChat(
-            api_key=emergent_key,
-            session_id=f"sim_{session_id}",
-            system_message=system_prompt
-        )
-        chat.with_model("openai", "gpt-5.2")
-
-        user_msg = UserMessage(text=f"Patient: {message}")
-        ai_response_raw = await chat.send_message(user_msg)
+        ai_response_raw = await call_gpt(system_prompt, f"Patient: {message}", f"sim_{session_id}")
 
         try:
             json_start = ai_response_raw.find('{')
@@ -1397,28 +1401,48 @@ RESPOND AS JSON:
             "session_id": session_id
         }
 
-# ============== GOOGLE CALENDAR ROUTES (PLACEHOLDER) ==============
+# ============== IN-APP CALENDAR (replaces Google Calendar) ==============
 
-@api_router.get("/google/calendar/auth-url")
-async def get_google_auth_url(user=Depends(get_current_user)):
-    """Get Google Calendar OAuth URL"""
-    google_client_id = os.environ.get("GOOGLE_CLIENT_ID", "")
-    if not google_client_id:
-        return {
-            "message": "Google Calendar integration placeholder - configure GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env",
-            "status": "placeholder",
-            "auth_url": ""
-        }
-    redirect_uri = os.environ.get("GOOGLE_REDIRECT_URI", "")
-    scope = "https://www.googleapis.com/auth/calendar"
-    auth_url = f"https://accounts.google.com/o/oauth2/auth?client_id={google_client_id}&redirect_uri={redirect_uri}&response_type=code&scope={scope}&access_type=offline&prompt=consent"
-    return {"auth_url": auth_url, "status": "active"}
+@api_router.get("/calendar/appointments")
+async def get_calendar_appointments(
+    month: Optional[str] = None,
+    year: Optional[str] = None,
+    user=Depends(get_current_user)
+):
+    """
+    Get appointments grouped by date for the in-app calendar view.
+    Query: ?month=3&year=2026
+    Returns: { "2026-03-15": [appt1, appt2], "2026-03-16": [appt3] }
+    """
+    clinic_id = user["clinic_id"]
+    now = datetime.now(timezone.utc)
+    m = int(month) if month else now.month
+    y = int(year) if year else now.year
 
-@api_router.get("/google/calendar/status")
-async def get_google_calendar_status(user=Depends(get_current_user)):
-    """Check if Google Calendar is connected"""
-    tokens = await db.google_tokens.find_one({"user_id": user["id"]}, {"_id": 0})
-    return {"connected": tokens is not None}
+    # Get date range for the month
+    start_date = f"{y}-{str(m).zfill(2)}-01"
+    if m == 12:
+        end_date = f"{y + 1}-01-01"
+    else:
+        end_date = f"{y}-{str(m + 1).zfill(2)}-01"
+
+    appointments = await db.appointments.find(
+        {
+            "clinic_id": clinic_id,
+            "preferred_date": {"$gte": start_date, "$lt": end_date}
+        },
+        {"_id": 0}
+    ).sort("preferred_time", 1).to_list(200)
+
+    # Group by date
+    grouped: Dict[str, list] = {}
+    for appt in appointments:
+        date = appt["preferred_date"]
+        if date not in grouped:
+            grouped[date] = []
+        grouped[date].append(appt)
+
+    return {"month": m, "year": y, "appointments_by_date": grouped, "total": len(appointments)}
 
 # ============== SEED DATA ==============
 
@@ -1474,6 +1498,7 @@ async def seed_data():
             **clinic_data["clinic"],
             "email": clinic_data["user"]["email"],
             "phone": clinic_data["user"]["phone"],
+            "twilio_number": clinic_data["user"]["phone"],
             "description": f"Leading dental clinic with experienced doctors providing quality dental care.",
             "created_at": datetime.now(timezone.utc).isoformat()
         }

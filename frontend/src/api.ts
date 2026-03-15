@@ -66,9 +66,13 @@ export const api = {
   simulateCall: (data: any) => request('/ai-agent/simulate-call', { method: 'POST', body: JSON.stringify(data) }),
   triggerMorningCalls: () => request('/twilio/voice/morning-calls', { method: 'POST' }),
 
-  // Google Calendar
-  getGoogleAuthUrl: () => request('/google/calendar/auth-url'),
-  getGoogleCalendarStatus: () => request('/google/calendar/status'),
+  // Calendar (in-app)
+  getCalendarAppointments: (month?: number, year?: number) => {
+    const params = [];
+    if (month) params.push(`month=${month}`);
+    if (year) params.push(`year=${year}`);
+    return request(`/calendar/appointments${params.length ? `?${params.join('&')}` : ''}`);
+  },
 
   // Seed
   seed: () => request('/seed', { method: 'POST' }),

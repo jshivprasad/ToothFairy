@@ -1,10 +1,9 @@
-import React, { useState, useCallback } from 'react';
+import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/auth';
-import { api } from '../../src/api';
 import { colors, spacing, radius } from '../../src/theme';
 
 const c = colors.light;
@@ -12,24 +11,6 @@ const c = colors.light;
 export default function SettingsScreen() {
   const router = useRouter();
   const { user, logout } = useAuth();
-  const [calendarConnected, setCalendarConnected] = useState(false);
-
-  useFocusEffect(useCallback(() => {
-    api.getGoogleCalendarStatus().then(r => setCalendarConnected(r.connected)).catch(() => {});
-  }, []));
-
-  async function handleConnectCalendar() {
-    try {
-      const res = await api.getGoogleAuthUrl();
-      if (res.status === 'placeholder') {
-        Alert.alert('Google Calendar', 'Configure GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in backend .env to enable Google Calendar integration.');
-      } else if (res.auth_url) {
-        Alert.alert('Google Calendar', 'Open this URL in your browser to connect:\n\n' + res.auth_url);
-      }
-    } catch (e: any) {
-      Alert.alert('Error', e.message);
-    }
-  }
 
   async function handleLogout() {
     Alert.alert('Logout', 'Are you sure you want to logout?', [
@@ -63,28 +44,19 @@ export default function SettingsScreen() {
           <MenuItem testID="settings-clinic-info" icon="business-outline" label="Clinic Information" onPress={() => router.push('/(tabs)/clinic')} />
           <MenuItem testID="settings-clinic-hours" icon="time-outline" label="Clinic Hours" onPress={() => router.push('/clinic-hours')} />
           <MenuItem testID="settings-patients" icon="people-outline" label="Patients" onPress={() => router.push('/patients')} />
+          <MenuItem testID="settings-calendar" icon="calendar-outline" label="Appointment Calendar" onPress={() => router.push('/calendar')} />
         </View>
 
         {/* AI Agent */}
         <Text style={styles.sectionTitle}>AI Agent</Text>
         <View style={styles.menuCard}>
           <MenuItem testID="settings-ai-config" icon="pulse-outline" label="AI Agent Configuration" onPress={() => router.push('/ai-config')} />
+          <MenuItem testID="settings-test-ai" icon="chatbubble-ellipses-outline" label="Test AI Agent (Simulate Call)" onPress={() => router.push('/simulate-chat')} />
         </View>
 
         {/* Integrations */}
         <Text style={styles.sectionTitle}>Integrations</Text>
         <View style={styles.menuCard}>
-          <TouchableOpacity testID="settings-google-calendar" style={styles.menuItem} onPress={handleConnectCalendar}>
-            <View style={[styles.menuIconWrap, { backgroundColor: '#4285F420' }]}>
-              <Ionicons name="logo-google" size={20} color="#4285F4" />
-            </View>
-            <Text style={styles.menuLabel}>Google Calendar</Text>
-            <View style={[styles.connectedBadge, { backgroundColor: calendarConnected ? c.success + '20' : c.warning + '20' }]}>
-              <Text style={{ fontSize: 12, color: calendarConnected ? c.success : c.warning, fontWeight: '600' }}>
-                {calendarConnected ? 'Connected' : 'Not Connected'}
-              </Text>
-            </View>
-          </TouchableOpacity>
           <View style={styles.menuItem}>
             <View style={[styles.menuIconWrap, { backgroundColor: '#25D36620' }]}>
               <Ionicons name="logo-whatsapp" size={20} color="#25D366" />
