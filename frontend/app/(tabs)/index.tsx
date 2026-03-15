@@ -102,7 +102,7 @@ export default function DashboardScreen() {
         <View style={styles.actionsRow}>
           <ActionButton testID="action-new-appointment" icon="add-circle" label="New Appt" onPress={() => router.push('/add-appointment')} />
           <ActionButton testID="action-patients" icon="people" label="Patients" onPress={() => router.push('/patients')} />
-          <ActionButton testID="action-clinic-hours" icon="time" label="Hours" onPress={() => router.push('/clinic-hours')} />
+          <ActionButton testID="action-test-ai" icon="chatbubble-ellipses" label="Test AI" onPress={() => router.push('/simulate-chat')} />
           <ActionButton testID="action-ai-config" icon="settings" label="AI Config" onPress={() => router.push('/ai-config')} />
         </View>
 

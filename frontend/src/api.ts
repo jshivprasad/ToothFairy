@@ -61,8 +61,10 @@ export const api = {
   // Dashboard
   getDashboardStats: () => request('/dashboard/stats'),
 
-  // AI Chat
+  // AI Chat & Simulation
   aiChat: (data: any) => request('/ai-agent/chat', { method: 'POST', body: JSON.stringify(data) }),
+  simulateCall: (data: any) => request('/ai-agent/simulate-call', { method: 'POST', body: JSON.stringify(data) }),
+  triggerMorningCalls: () => request('/twilio/voice/morning-calls', { method: 'POST' }),
 
   // Google Calendar
   getGoogleAuthUrl: () => request('/google/calendar/auth-url'),
